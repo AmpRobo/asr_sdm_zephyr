@@ -1,0 +1,52 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * ICM-42688 sensor devicetree configuration
+ * for Seeed XIAO RP2350 development board
+ *
+ * Hardware wiring:
+ *   ICM-42688    XIAO RP2350
+ *   ---------    -----------
+ *   SPC (SCK)    D8  (GP2)
+ *   SDI (MOSI)   D10 (GP3)
+ *   SDO (MISO)   D9  (GP4)
+ *   CS           D3  (GP5)
+ *   VDD          3.3V
+ *   GND          GND
+ */
+
+#include <zephyr/dt-bindings/sensor/icm42688.h>
+
+/* Enable USB CDC ACM as console */
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/ {
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+	};
+};
+
+&xiao_spi {
+	status = "okay";
+	cs-gpios = <&xiao_d 3 GPIO_ACTIVE_LOW>;  /* D3 = GP5 */
+
+	icm42688: icm42688@0 {
+		compatible = "invensense,icm42688", "invensense,icm4268x";
+		reg = <0>;
+		spi-max-frequency = <24000000>;  /* 24 MHz */
+
+		/* Accelerometer configuration */
+		accel-pwr-mode = <ICM42688_DT_ACCEL_LN>;      /* Low-noise mode */
+		accel-fs = <ICM42688_DT_ACCEL_FS_16>;         /* ±16g */
+		accel-odr = <ICM42688_DT_ACCEL_ODR_1000>;     /* 1000 Hz */
+
+		/* Gyroscope configuration */
+		gyro-pwr-mode = <ICM42688_DT_GYRO_LN>;        /* Low-noise mode */
+		gyro-fs = <ICM42688_DT_GYRO_FS_500>;          /* ±500 dps */
+		gyro-odr = <ICM42688_DT_GYRO_ODR_200>;        /* 200 Hz */
+	};
+};

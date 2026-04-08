@@ -1,0 +1,6 @@
+repositories:
+  zephyr:
+    type: git
+    url: https://github.com/zephyrproject-rtos/zephyr.git
+    version: v4.4.0-rc1
+    path: zephyr

@@ -6,3 +6,6 @@ zephyr_ws
 
 # Build Output
 build
+# Python Cache
+__pycache__/
+*.pyc

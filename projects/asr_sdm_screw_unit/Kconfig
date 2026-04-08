@@ -1,0 +1,3 @@
+mainmenu "ICM42688 demo application"
+
+source "Kconfig.zephyr"
