@@ -8,7 +8,8 @@
  */
 
 #include <zephyr/device.h>
-#include <zephyr/drivers/led_strip.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/led.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
@@ -19,8 +20,45 @@ LOG_MODULE_REGISTER(icm42688_demo, LOG_LEVEL_INF);
 /* SPI mode: use the ICM-42688 node from devicetree */
 #define ICM42688_NODE DT_NODELABEL(icm42688)
 
-/* Board RGB NeoPixel (see xiao_rp2350.dtsi: ws2812, chain-length = 1) */
-#define WS2812_NODE DT_NODELABEL(ws2812)
+/* Board PWM LED group (compatible: pwm-leds; child pwm_led0 — index 0) */
+#if DT_HAS_COMPAT_STATUS_OKAY(pwm_leds)
+#define PWM_LEDS_DEV DEVICE_DT_GET(DT_COMPAT_GET_ANY_STATUS_OKAY(pwm_leds))
+#define PWM_LED_INDEX 0U
+
+#define PWM_LED_THREAD_STACK_SIZE 1024U
+#define PWM_LED_THREAD_PRIO       8
+
+K_THREAD_STACK_DEFINE(pwm_led_stack, PWM_LED_THREAD_STACK_SIZE);
+static struct k_thread pwm_led_thread_data;
+
+static void pwm_led_thread(void *p1, void *p2, void *p3)
+{
+    ARG_UNUSED(p1);
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    if (!device_is_ready(PWM_LEDS_DEV))
+    {
+        LOG_ERR("PWM LED (pwm-leds) 未就绪");
+        return;
+    }
+
+    (void)led_off(PWM_LEDS_DEV, PWM_LED_INDEX);
+
+    for (;;)
+    {
+        static bool pwm_bright;
+        int r = led_set_brightness(PWM_LEDS_DEV, PWM_LED_INDEX, pwm_bright ? 0U : 60U);
+
+        if (r < 0)
+        {
+            LOG_ERR("PWM LED 设置失败: %d", r);
+        }
+        pwm_bright = !pwm_bright;
+        k_sleep(K_MSEC(500));
+    }
+}
+#endif
 
 #if !DT_NODE_EXISTS(ICM42688_NODE)
 #error "设备树中未找到 icm42688 节点，请检查 overlay 文件"
@@ -61,13 +99,10 @@ int main(void)
     /* Short delay to stabilize the serial connection */
     k_sleep(K_MSEC(500));
 
-#if DT_NODE_EXISTS(WS2812_NODE)
-    const struct device *const ws2812 = DEVICE_DT_GET(WS2812_NODE);
-
-    if (!device_is_ready(ws2812))
-    {
-        LOG_ERR("WS2812 (RGB) 未就绪");
-    }
+#if DT_HAS_COMPAT_STATUS_OKAY(pwm_leds)
+    k_thread_create(&pwm_led_thread_data, pwm_led_stack,
+                    K_THREAD_STACK_SIZEOF(pwm_led_stack), pwm_led_thread, NULL, NULL, NULL,
+                    PWM_LED_THREAD_PRIO, 0, K_NO_WAIT);
 #endif
 
     /* SPI mode: check that the sensor device is ready */
@@ -107,14 +142,6 @@ int main(void)
 
         if (!host_connected)
         {
-#if DT_NODE_EXISTS(WS2812_NODE)
-            struct led_rgb off = {0};
-
-            if (device_is_ready(ws2812))
-            {
-                (void)led_strip_update_rgb(ws2812, &off, 1);
-            }
-#endif
             k_sleep(K_MSEC(200));
             continue;
         }
@@ -149,31 +176,6 @@ int main(void)
         LOG_INF("芯片温度: %.1f °C", sensor_value_to_double(&temp));
 
         LOG_INF("------------------------------------------");
-
-#if DT_NODE_EXISTS(WS2812_NODE)
-        /* Toggle onboard RGB green channel (NeoPixel) each sample period */
-        if (device_is_ready(ws2812))
-        {
-            static bool green_on;
-            struct led_rgb pixel;
-
-            if (green_on)
-            {
-                pixel = (struct led_rgb){0};
-            }
-            else
-            {
-                pixel = (struct led_rgb){.g = 64U};
-            }
-
-            ret = led_strip_update_rgb(ws2812, &pixel, 1);
-            if (ret < 0)
-            {
-                LOG_ERR("WS2812 更新失败: %d", ret);
-            }
-            green_on = !green_on;
-        }
-#endif
 
         /* Sample once per second */
         k_sleep(K_MSEC(1000));

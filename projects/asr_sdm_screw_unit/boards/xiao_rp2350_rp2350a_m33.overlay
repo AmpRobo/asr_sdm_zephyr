@@ -30,6 +30,19 @@
 	};
 };
 
+/*
+ * Onboard user LED: gpio-leds (led0) and pwm-leds (pwm_led0) both use GP25
+ * (PWM slice 4 channel B). If gpio-leds stays enabled, the pin stays GPIO and
+ * PWM dimming never works — disable gpio-leds when using pwm_led0.
+ */
+&{/leds} {
+	status = "disabled";
+};
+
+&{/pwm_leds} {
+	status = "okay";
+};
+
 &xiao_spi {
 	status = "okay";
 	cs-gpios = <&xiao_d 3 GPIO_ACTIVE_LOW>;  /* D3 = GP5 */
