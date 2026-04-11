@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config ASR_LED
+	bool "ASR GPIO LED group library"
+	default y
+	depends on GPIO
+	help
+	  Library for driving a group of GPIO-connected LEDs described in devicetree
+	  (compatible: asr,gpio-led-group). Intended for boards such as Seeed XIAO RP2350.

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+description: |
+  A logical group of GPIO-driven LEDs. Each entry in gpios is one LED in order
+  from index 0..N-1. Active level follows the GPIO flag (GPIO_ACTIVE_HIGH / LOW).
+
+compatible: "asr,gpio-led-group"
+
+include: base.yaml
+
+properties:
+  gpios:
+    type: phandle-array
+    required: true
+    description: |
+      One GPIO specifier per LED, in stable order (index 0 is the first cell).

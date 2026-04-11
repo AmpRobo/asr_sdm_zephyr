@@ -8,6 +8,7 @@
  */
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/led_strip.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/kernel.h>
@@ -17,6 +18,9 @@ LOG_MODULE_REGISTER(icm42688_demo, LOG_LEVEL_INF);
 
 /* SPI mode: use the ICM-42688 node from devicetree */
 #define ICM42688_NODE DT_NODELABEL(icm42688)
+
+/* Board RGB NeoPixel (see xiao_rp2350.dtsi: ws2812, chain-length = 1) */
+#define WS2812_NODE DT_NODELABEL(ws2812)
 
 #if !DT_NODE_EXISTS(ICM42688_NODE)
 #error "设备树中未找到 icm42688 节点，请检查 overlay 文件"
@@ -57,6 +61,15 @@ int main(void)
     /* Short delay to stabilize the serial connection */
     k_sleep(K_MSEC(500));
 
+#if DT_NODE_EXISTS(WS2812_NODE)
+    const struct device *const ws2812 = DEVICE_DT_GET(WS2812_NODE);
+
+    if (!device_is_ready(ws2812))
+    {
+        LOG_ERR("WS2812 (RGB) 未就绪");
+    }
+#endif
+
     /* SPI mode: check that the sensor device is ready */
     if (!device_is_ready(icm))
     {
@@ -94,6 +107,14 @@ int main(void)
 
         if (!host_connected)
         {
+#if DT_NODE_EXISTS(WS2812_NODE)
+            struct led_rgb off = {0};
+
+            if (device_is_ready(ws2812))
+            {
+                (void)led_strip_update_rgb(ws2812, &off, 1);
+            }
+#endif
             k_sleep(K_MSEC(200));
             continue;
         }
@@ -128,6 +149,31 @@ int main(void)
         LOG_INF("芯片温度: %.1f °C", sensor_value_to_double(&temp));
 
         LOG_INF("------------------------------------------");
+
+#if DT_NODE_EXISTS(WS2812_NODE)
+        /* Toggle onboard RGB green channel (NeoPixel) each sample period */
+        if (device_is_ready(ws2812))
+        {
+            static bool green_on;
+            struct led_rgb pixel;
+
+            if (green_on)
+            {
+                pixel = (struct led_rgb){0};
+            }
+            else
+            {
+                pixel = (struct led_rgb){.g = 64U};
+            }
+
+            ret = led_strip_update_rgb(ws2812, &pixel, 1);
+            if (ret < 0)
+            {
+                LOG_ERR("WS2812 更新失败: %d", ret);
+            }
+            green_on = !green_on;
+        }
+#endif
 
         /* Sample once per second */
         k_sleep(K_MSEC(1000));

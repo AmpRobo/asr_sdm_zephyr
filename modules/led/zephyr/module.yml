@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+name: asr_led
+build:
+  cmake: zephyr
+  kconfig: zephyr/Kconfig
+  settings:
+    dts_root: .
