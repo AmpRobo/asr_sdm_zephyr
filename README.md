@@ -52,3 +52,9 @@ asr_sdm_zephyr/
 ```
 
 其中 `.venv/`、`zephyr_ws/` 和 `build/` 为本地安装或构建后生成的目录。
+
+## Compilation
+Build command example:
+```sh
+west build -p always -b xiao_rp2350/rp2350a/m33 -s projects/asr_sdm_screw_unit -d build/asr_sdm_screw_unit
+```
