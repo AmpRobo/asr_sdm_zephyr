@@ -8,6 +8,13 @@ config ASR_IMU
 	  Driver helpers for the project's ICM-42688 sensor. Provides device
 	  readiness validation and single-sample reads.
 
+config ASR_AHRS
+	bool "ASR AHRS fusion"
+	default y
+	depends on ASR_IMU
+	help
+	  AHRS fusion helpers built on top of the IMU sample cache.
+
 config ASR_IMU_THREAD
 	bool "IMU read/print background thread"
 	default n
@@ -29,4 +36,5 @@ config ASR_IMU_PERIOD_MS
 	default 1000
 	depends on ASR_IMU_THREAD
 	help
-	  Delay between successful IMU fetch/log iterations.
+	  Delay between IMU fetch and AHRS update iterations. Logging is throttled
+	  independently.

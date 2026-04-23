@@ -26,6 +26,9 @@ int asr_imu_thread_init(void);
  */
 int asr_imu_thread_start(void);
 
+int asr_ahrs_thread_init(void);
+int asr_ahrs_thread_start(void);
+
 #ifdef __cplusplus
 }
 #endif
