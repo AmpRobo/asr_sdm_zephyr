@@ -37,13 +37,29 @@ asr_sdm_zephyr/
 ├── zephyr.repos
 ├── modules/
 │   └── drivers/
+│       ├── dynamixel/
+│       │   ├── include/asr/dynamixel.h
+│       │   ├── src/
+│       │   │   ├── dynamixel_bus.c
+│       │   │   ├── dynamixel_packet.c
+│       │   │   └── dynamixel_packet.h
+│       │   ├── zephyr/
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── Kconfig
+│       │   │   └── dts/bindings/serial/
+│       │   │       └── asr,dynamixel-rs485.yaml
+│       │   ├── README.md
+│       │   └── DYNAMIXEL_PROTOCOL.md
+│       ├── README.md
+│       └── zephyr/
 ├── projects/
 │   └── asr_sdm_screw_unit/
 │       ├── boards/
 │       │   └── xiao_rp2350_rp2350a_m33.overlay
 │       ├── CMakeLists.txt
-│       ├── Kconfig
 │       ├── prj.conf
+│       ├── README.md
+│       ├── ZEPHYR_RTOS_OVERVIEW.md
 │       └── src/
 │           └── main.c
 ├── .venv/

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config ASR_DYNAMIXEL
+	bool "ASR single-servo Dynamixel RS-485 driver"
+	default n
+	depends on SERIAL && GPIO
+	help
+	  Driver helpers for a single XM430-class Dynamixel servo connected over
+	  an external RS-485 transceiver with manual direction control for
+	  half-duplex Protocol 2.0 transactions.
