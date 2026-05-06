@@ -48,6 +48,24 @@ typedef struct
 
 typedef struct
 {
+    float quaternion[4];
+    float euler_deg[3];
+    float gravity[3];
+    float linear_accel[3];
+    float earth_accel[3];
+    bool ready;
+} sensor_ahrs_t;
+
+typedef struct
+{
+    bool initialising;
+    bool angular_rate_recovery;
+    bool acceleration_recovery;
+    bool magnetic_recovery;
+} sensor_ahrs_flags_t;
+
+typedef struct
+{
     uint32_t unit_id;
     uint8_t msg_can_tx[BUF_SIZE];
     uint8_t msg_can_rx[BUF_SIZE];
@@ -56,6 +74,8 @@ typedef struct
     uint8_t flashData[8];
     sensor_imu_t imu_raw_data;
     sensor_imu_float_t imu_float_data;
+    sensor_ahrs_t ahrs;
+    sensor_ahrs_flags_t ahrs_flags;
     imu_filter_t imu_filter;
     uint8_t cmd_motor[2];
     uint8_t cmd_joint1[4];
