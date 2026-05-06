@@ -15,10 +15,8 @@
 #include <asr/comm_thread.h>
 #include <string.h>
 
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
-#include <zephyr/kernel.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(asr_comm, LOG_LEVEL_INF);
@@ -265,19 +263,29 @@ bool protocol_update(const uint8_t msg[ASR_COMM_MSG_SIZE])
             }
             break;
 
-        case ASR_COMM_PARAM_JOINT1:
-            unit_status.cmd_joint1[0] = msg[4];
-            unit_status.cmd_joint1[1] = msg[5];
-            unit_status.cmd_joint1[2] = msg[6];
-            unit_status.cmd_joint1[3] = msg[7];
-            break;
+		case ASR_COMM_PARAM_JOINT1:
+			unit_status.cmd_joint1[0] = msg[4];
+			unit_status.cmd_joint1[1] = msg[5];
+			unit_status.cmd_joint1[2] = msg[6];
+			unit_status.cmd_joint1[3] = msg[7];
+			if (hw_cb && hw_cb->on_dynamixel_goal_position) {
+				hw_cb->on_dynamixel_goal_position(
+					ASR_DXL_1,
+					(int32_t)sys_get_le32(&msg[4]));
+			}
+			break;
 
-        case ASR_COMM_PARAM_JOINT2:
-            unit_status.cmd_joint2[0] = msg[4];
-            unit_status.cmd_joint2[1] = msg[5];
-            unit_status.cmd_joint2[2] = msg[6];
-            unit_status.cmd_joint2[3] = msg[7];
-            break;
+		case ASR_COMM_PARAM_JOINT2:
+			unit_status.cmd_joint2[0] = msg[4];
+			unit_status.cmd_joint2[1] = msg[5];
+			unit_status.cmd_joint2[2] = msg[6];
+			unit_status.cmd_joint2[3] = msg[7];
+			if (hw_cb && hw_cb->on_dynamixel_goal_position) {
+				hw_cb->on_dynamixel_goal_position(
+					ASR_DXL_2,
+					(int32_t)sys_get_le32(&msg[4]));
+			}
+			break;
 
         case ASR_COMM_PARAM_JOINT1_TORQUE:
             unit_status.dynamixel_enable[ASR_DXL_1] = (bool)msg[4];

@@ -15,7 +15,6 @@
  */
 
 #include <zephyr/dt-bindings/sensor/icm42688.h>
-#include <zephyr/dt-bindings/pinctrl/rpi-pico-rp2350a-pinctrl.h>
 
 /* USB CDC ACM device (console TX + interface module RX) */
 &zephyr_udc0 {
@@ -45,26 +44,24 @@
 	status = "okay";
 };
 
-&pinctrl {
-	uart0_gp01_default: uart0_gp01_default {
-		group1 {
-			pinmux = <UART0_TX_P0>;
-		};
-
-		group2 {
-			pinmux = <UART0_RX_P1>;
-			input-enable;
-		};
-	};
-};
-
 &uart0 {
-	current-speed = <115200>;
-	pinctrl-0 = <&uart0_gp01_default>;
-	pinctrl-names = "default";
+	current-speed = <57600>;
 	status = "okay";
 };
 
+&uart1 {
+	current-speed = <57600>;
+	status = "okay";
+
+	dynamixel0: dynamixel0 {
+		compatible = "asr,dynamixel-rs485";
+		status = "okay";
+		dir-gpios = <&xiao_d 2 GPIO_ACTIVE_HIGH>; /* D2 = GP28 */
+		servo-id = <1>;
+		reply-timeout-us = <20000>;
+		turnaround-delay-us = <2000>;
+	};
+};
 &xiao_spi {
 	status = "okay";
 	cs-gpios = <&xiao_d 3 GPIO_ACTIVE_LOW>;  /* D3 = GP5 */

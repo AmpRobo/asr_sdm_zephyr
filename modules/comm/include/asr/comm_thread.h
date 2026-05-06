@@ -56,6 +56,7 @@ struct asr_comm_callbacks {
 	void (*on_led_write)(bool state);
 	void (*on_motor_set)(uint8_t channel, uint8_t value);
 	void (*on_dynamixel_torque)(uint8_t id, bool enable);
+	void (*on_dynamixel_goal_position)(uint8_t id, int32_t goal_position);
 	/**
 	 * Read IMU data into a response buffer.
 	 * @param buf  Output buffer of exactly @ref ASR_COMM_MSG_SIZE bytes.

@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: ASR single-servo Dynamixel RS-485 device
+
+compatible: "asr,dynamixel-rs485"
+
+include: uart-device.yaml
+
+properties:
+  dir-gpios:
+    type: phandle-array
+    required: true
+    description: >
+      Driver direction pin for the external RS-485 transceiver. The pin is
+      asserted before sending a packet and deasserted before waiting for the
+      servo status packet.
+
+  servo-id:
+    type: int
+    required: true
+    description: Dynamixel ID of the attached servo.
+
+  reply-timeout-us:
+    type: int
+    default: 20000
+    description: Maximum time to wait for a status packet after a transaction.
+
+  turnaround-delay-us:
+    type: int
+    default: 200
+    description: >
+      Additional delay after the last transmitted byte before switching the
+      RS-485 transceiver back to receive mode.
