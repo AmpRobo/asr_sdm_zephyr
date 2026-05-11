@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config ASR_DYNAMIXEL
+	bool "ASR single-servo Dynamixel RS-485 driver"
+	default n
+	depends on SERIAL && GPIO
+	help
+	  Driver helpers for a single XM430-class Dynamixel servo connected over
+	  an external RS-485 transceiver with manual direction control for
+	  half-duplex Protocol 2.0 transactions.
+
+config ASR_DYNAMIXEL_THREAD
+	bool "ASR Dynamixel background bring-up thread"
+	default n
+	depends on ASR_DYNAMIXEL
+	help
+	  Spawns a low-priority thread that performs the Dynamixel bring-up
+	  sequence (ping, mode/limits configuration, current-position readback)
+	  asynchronously without blocking main().
+
+config ASR_DYNAMIXEL_THREAD_STACK_SIZE
+	int "Dynamixel thread stack size"
+	default 2048
+	depends on ASR_DYNAMIXEL_THREAD
+	help
+	  Stack size for the Dynamixel background bring-up thread.
+
+config ASR_DYNAMIXEL_THREAD_PRIORITY
+	int "Dynamixel thread priority"
+	default 7
+	depends on ASR_DYNAMIXEL_THREAD
+	help
+	  Cooperative priority for the Dynamixel background thread.
+
+config ASR_DYNAMIXEL_STARTUP_DELAY_MS
+	int "Dynamixel bring-up startup delay in milliseconds"
+	default 0
+	depends on ASR_DYNAMIXEL_THREAD
+	help
+	  Delay before the Dynamixel thread starts the servo bring-up. Useful
+	  to give USB/comm peripherals time to settle before the first ping.

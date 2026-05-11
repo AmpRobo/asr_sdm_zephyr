@@ -36,22 +36,19 @@ asr_sdm_zephyr/
 ├── install_zephyr.py
 ├── zephyr.repos
 ├── modules/
-│   └── drivers/
-│       ├── dynamixel/
-│       │   ├── include/asr/dynamixel.h
-│       │   ├── src/
-│       │   │   ├── dynamixel_bus.c
-│       │   │   ├── dynamixel_packet.c
-│       │   │   └── dynamixel_packet.h
-│       │   ├── zephyr/
-│       │   │   ├── CMakeLists.txt
-│       │   │   ├── Kconfig
-│       │   │   └── dts/bindings/serial/
-│       │   │       └── asr,dynamixel-rs485.yaml
-│       │   ├── README.md
-│       │   └── DYNAMIXEL_PROTOCOL.md
-│       ├── README.md
-│       └── zephyr/
+│   └── dynamixel/
+│       ├── include/asr/dynamixel.h
+│       ├── src/
+│       │   ├── dynamixel_bus.c
+│       │   ├── dynamixel_packet.c
+│       │   └── dynamixel_packet.h
+│       ├── zephyr/
+│       │   ├── CMakeLists.txt
+│       │   ├── Kconfig
+│       │   ├── module.yml
+│       │   └── dts/bindings/serial/
+│       │       └── asr,dynamixel-rs485.yaml
+│       └── README.md
 ├── projects/
 │   └── asr_sdm_screw_unit/
 │       ├── boards/

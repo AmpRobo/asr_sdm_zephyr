@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-name: asr_drivers
+name: asr_dynamixel
 build:
   cmake: zephyr
   kconfig: zephyr/Kconfig
   settings:
-    dts_root: dynamixel/zephyr
+    dts_root: zephyr

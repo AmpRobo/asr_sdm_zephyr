@@ -101,6 +101,50 @@ int asr_dynamixel_get_hardware_error_status(uint8_t *status);
  */
 int asr_dynamixel_get_position_limits(int32_t *min_pos, int32_t *max_pos);
 
+/* -------------------------------------------------------------------------
+ * Application-level helpers (cached bring-up state + comm-callback wrappers)
+ *
+ * These wrap the lower-level driver above and add readiness/range checking
+ * suitable for the screw-unit application. The bring-up is normally driven by
+ * the Dynamixel thread (see asr/dynamixel_thread.h); the handlers below match
+ * the asr_comm_callbacks signatures so they can be registered directly.
+ * -------------------------------------------------------------------------*/
+
+/**
+ * Run the Dynamixel bring-up sequence: ping the servo, validate the model and
+ * mode, fetch position limits, and cache the current position. Updates the
+ * internal state used by the handlers below.
+ *
+ * @return 0 on success, negative errno on failure.
+ */
+int asr_dynamixel_app_init(void);
+
+/** True after a successful @ref asr_dynamixel_app_init. */
+bool asr_dynamixel_app_is_ready(void);
+
+/**
+ * Comm-callback: enable/disable torque on the primary servo. Performs
+ * readiness checks and ignores commands targeting unmapped joints.
+ */
+void asr_dynamixel_app_handle_torque(uint8_t id, bool enable);
+
+/**
+ * Comm-callback: send a goal position to the primary servo. The goal is
+ * range-checked against the cached position limits.
+ */
+void asr_dynamixel_app_handle_goal_position(uint8_t id, int32_t goal_position);
+
+/**
+ * Read the present position of the primary servo. Performs the same
+ * readiness/mapping checks as the comm-callback handlers and logs the value
+ * on success. Intended for the USB control read-back path.
+ *
+ * @param id        Joint index (only the primary servo is mapped).
+ * @param position  Output present position; only written on success.
+ * @return 0 on success, negative errno on failure.
+ */
+int asr_dynamixel_app_handle_position_read(uint8_t id, int32_t *position);
+
 #ifdef __cplusplus
 }
 #endif
