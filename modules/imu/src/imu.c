@@ -12,6 +12,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
 
 #if IS_ENABLED(CONFIG_ASR_AHRS)
@@ -21,10 +22,8 @@
 
 LOG_MODULE_REGISTER(asr_imu, LOG_LEVEL_INF);
 
-#define IMU_SENSOR_NODE DT_NODELABEL(icm42688)
-#define ASR_IMU_LOG_INTERVAL_MS 1000
-
-static int64_t last_log_ms;
+#define IMU_SENSOR_NODE DT_ALIAS(asr_imu)
+#define ASR_IMU_LOG_INTERVAL_MS CONFIG_ASR_IMU_LOG_INTERVAL_MS
 
 /* --- cached sample ------------------------------------------------------- */
 
@@ -46,11 +45,40 @@ int asr_imu_get_latest(struct asr_imu_sample *sample)
     return ret;
 }
 
+int asr_imu_app_handle_read(uint8_t buf[8])
+{
+    struct asr_imu_sample sample;
+    int ret;
+
+    if (buf == NULL)
+    {
+        return -EINVAL;
+    }
+
+    ret = asr_imu_get_latest(&sample);
+    if (ret == -ENODATA)
+    {
+        ret = asr_imu_read(&sample);
+    }
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    sys_put_le16((int16_t)sample.accel[0].val1, &buf[0]);
+    sys_put_le16((int16_t)sample.accel[1].val1, &buf[2]);
+    sys_put_le16((int16_t)sample.accel[2].val1, &buf[4]);
+    sys_put_le16((int16_t)sample.temp.val1, &buf[6]);
+    return 0;
+}
+
 /* --- sensor access ------------------------------------------------------- */
 
 #if DT_NODE_EXISTS(IMU_SENSOR_NODE) && DT_NODE_HAS_STATUS(IMU_SENSOR_NODE, okay)
 
 #define IMU_DEV DEVICE_DT_GET(IMU_SENSOR_NODE)
+
+static int64_t last_log_ms;
 
 int asr_imu_init(void)
 {
@@ -138,20 +166,20 @@ int asr_imu_update(void)
 
 int asr_imu_init(void)
 {
-    LOG_ERR("missing enabled icm42688 node");
+    LOG_ERR("missing enabled asr-imu alias node");
     return -ENODEV;
 }
 
 int asr_imu_read(struct asr_imu_sample *sample)
 {
     (void)sample;
-    LOG_ERR("missing enabled icm42688 node");
+    LOG_ERR("missing enabled asr-imu alias node");
     return -ENODEV;
 }
 
 int asr_imu_update(void)
 {
-    LOG_ERR("missing enabled icm42688 node");
+    LOG_ERR("missing enabled asr-imu alias node");
     return -ENODEV;
 }
 

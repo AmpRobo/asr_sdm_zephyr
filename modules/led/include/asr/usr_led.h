@@ -8,6 +8,7 @@
 #ifndef ASR_USR_LED_H_
 #define ASR_USR_LED_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -30,6 +31,12 @@ void asr_usr_led_toggle(void);
  * @return 0 on success, -ENOTSUP if PWM unavailable, negative errno on failure.
  */
 int asr_usr_led_set_brightness(uint8_t brightness);
+
+/**
+ * 处理应用层 LED 写入命令。
+ * @param state true 表示全亮，false 表示关闭。
+ */
+void asr_usr_led_app_handle_write(bool state);
 
 #ifdef __cplusplus
 }

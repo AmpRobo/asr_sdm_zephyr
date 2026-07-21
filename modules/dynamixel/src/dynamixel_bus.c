@@ -22,16 +22,20 @@
 
 LOG_MODULE_REGISTER(asr_dynamixel, LOG_LEVEL_INF);
 
+#define DXL_ADDR_DRIVE_MODE           10U
 #define DXL_ADDR_OPERATING_MODE       11U
 #define DXL_ADDR_MAX_POSITION_LIMIT   48U
 #define DXL_ADDR_MIN_POSITION_LIMIT   52U
 #define DXL_ADDR_TORQUE_ENABLE        64U
 #define DXL_ADDR_STATUS_RETURN_LEVEL  68U
 #define DXL_ADDR_HARDWARE_ERROR       70U
+#define DXL_ADDR_PROFILE_ACCELERATION 108U
+#define DXL_ADDR_PROFILE_VELOCITY     112U
 #define DXL_ADDR_GOAL_POSITION        116U
 #define DXL_ADDR_PRESENT_POSITION     132U
 
 #define ASR_DXL_DEFAULT_BAUDRATE      57600U
+#define ASR_DXL_RX_PACKET_SKIP_LIMIT  4U
 
 struct asr_dynamixel_config {
 	const struct device *uart;
@@ -51,10 +55,22 @@ struct asr_dynamixel_driver_api {
 		    uint8_t *firmware_version);
 	int (*get_operating_mode)(const struct device *dev, uint8_t *mode);
 	int (*set_operating_mode)(const struct device *dev, uint8_t mode);
+	int (*get_drive_mode)(const struct device *dev, uint8_t *mode);
+	int (*set_drive_mode)(const struct device *dev, uint8_t mode);
 	int (*set_torque)(const struct device *dev, bool enable);
+	int (*get_torque)(const struct device *dev, bool *enabled);
 	int (*get_status_return_level)(const struct device *dev, uint8_t *level);
 	int (*set_status_return_level)(const struct device *dev, uint8_t level);
+	int (*get_profile_acceleration)(const struct device *dev, uint32_t *acceleration);
+	int (*set_profile_acceleration)(const struct device *dev, uint32_t acceleration);
+	int (*get_profile_velocity)(const struct device *dev, uint32_t *velocity);
+	int (*set_profile_velocity)(const struct device *dev, uint32_t velocity);
 	int (*set_goal_position)(const struct device *dev, int32_t goal_position);
+	int (*get_goal_position)(const struct device *dev, int32_t *goal_position);
+	int (*read_control_table)(const struct device *dev, uint16_t address,
+				  uint8_t *payload, size_t payload_len);
+	int (*write_control_table)(const struct device *dev, uint16_t address,
+				   const uint8_t *payload, size_t payload_len);
 	int (*get_present_position)(const struct device *dev, int32_t *position);
 	int (*get_hardware_error_status)(const struct device *dev, uint8_t *status);
 	int (*get_position_limits)(const struct device *dev, int32_t *min_pos,
@@ -120,7 +136,7 @@ static int asr_dynamixel_wait_byte(const struct asr_dynamixel_config *config,
 	return -ETIMEDOUT;
 }
 
-static int asr_dynamixel_receive_status(const struct asr_dynamixel_config *config,
+static int asr_dynamixel_receive_packet(const struct asr_dynamixel_config *config,
 					uint8_t *buffer, size_t *buffer_len)
 {
 	uint8_t window[4] = {0};
@@ -195,6 +211,37 @@ static int asr_dynamixel_receive_status(const struct asr_dynamixel_config *confi
 
 	*buffer_len = pos;
 	return 0;
+}
+
+static int asr_dynamixel_receive_status(const struct asr_dynamixel_config *config,
+						uint8_t *buffer, size_t *buffer_len)
+{
+	struct asr_dynamixel_status_packet status;
+	uint32_t skipped_packets = 0U;
+	int ret;
+
+	while (true) {
+		ret = asr_dynamixel_receive_packet(config, buffer, buffer_len);
+		if (ret < 0) {
+			return ret;
+		}
+
+		ret = asr_dynamixel_parse_status_packet(buffer, *buffer_len, &status);
+		if (ret == 0) {
+			return 0;
+		}
+
+		if (ret != -EPROTO) {
+			return ret;
+		}
+
+		skipped_packets++;
+		LOG_DBG("跳过非 Status 包或本机回显: count=%u len=%u",
+			(unsigned int)skipped_packets, (unsigned int)*buffer_len);
+		if (skipped_packets >= ASR_DXL_RX_PACKET_SKIP_LIMIT) {
+			return ret;
+		}
+	}
 }
 
 static int asr_dynamixel_transaction(const struct device *dev, uint8_t instruction,
@@ -306,6 +353,34 @@ static int asr_dynamixel_read_u8(const struct device *dev, uint16_t address,
 	return 0;
 }
 
+static int asr_dynamixel_read_control(const struct device *dev, uint16_t address,
+					    uint8_t *payload, size_t payload_len)
+{
+	struct asr_dynamixel_status_packet status = {0};
+	uint8_t params[4];
+	int ret;
+
+	if ((payload == NULL) || (payload_len > ASR_DYNAMIXEL_MAX_PARAMS)) {
+		return -EINVAL;
+	}
+
+	sys_put_le16(address, &params[0]);
+	sys_put_le16((uint16_t)payload_len, &params[2]);
+
+	ret = asr_dynamixel_transaction(dev, ASR_DYNAMIXEL_INST_READ, params,
+					sizeof(params), true, &status);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (status.param_len != payload_len) {
+		return -EMSGSIZE;
+	}
+
+	memcpy(payload, status.params, payload_len);
+	return 0;
+}
+
 static int asr_dynamixel_read_le32(const struct device *dev, uint16_t address,
 				   int32_t *value)
 {
@@ -394,12 +469,40 @@ static int asr_dynamixel_dev_set_operating_mode(const struct device *dev,
 				   sizeof(mode), true);
 }
 
+static int asr_dynamixel_dev_get_drive_mode(const struct device *dev, uint8_t *mode)
+{
+	return asr_dynamixel_read_u8(dev, DXL_ADDR_DRIVE_MODE, mode);
+}
+
+static int asr_dynamixel_dev_set_drive_mode(const struct device *dev, uint8_t mode)
+{
+	return asr_dynamixel_write(dev, DXL_ADDR_DRIVE_MODE, &mode, sizeof(mode), true);
+}
+
 static int asr_dynamixel_dev_set_torque(const struct device *dev, bool enable)
 {
 	uint8_t value = enable ? 1U : 0U;
 
 	return asr_dynamixel_write(dev, DXL_ADDR_TORQUE_ENABLE, &value,
 				   sizeof(value), true);
+}
+
+static int asr_dynamixel_dev_get_torque(const struct device *dev, bool *enabled)
+{
+	uint8_t value;
+	int ret;
+
+	if (enabled == NULL) {
+		return -EINVAL;
+	}
+
+	ret = asr_dynamixel_read_u8(dev, DXL_ADDR_TORQUE_ENABLE, &value);
+	if (ret < 0) {
+		return ret;
+	}
+
+	*enabled = value != 0U;
+	return 0;
 }
 
 static int asr_dynamixel_dev_get_status_return_level(const struct device *dev,
@@ -439,6 +542,64 @@ static int asr_dynamixel_dev_set_status_return_level(const struct device *dev,
 				   sizeof(level), true);
 }
 
+static int asr_dynamixel_dev_get_profile_acceleration(const struct device *dev,
+						       uint32_t *acceleration)
+{
+	int32_t value;
+	int ret;
+
+	if (acceleration == NULL) {
+		return -EINVAL;
+	}
+
+	ret = asr_dynamixel_read_le32(dev, DXL_ADDR_PROFILE_ACCELERATION, &value);
+	if (ret < 0) {
+		return ret;
+	}
+
+	*acceleration = (uint32_t)value;
+	return 0;
+}
+
+static int asr_dynamixel_dev_set_profile_acceleration(const struct device *dev,
+						       uint32_t acceleration)
+{
+	uint8_t payload[4];
+
+	sys_put_le32(acceleration, payload);
+	return asr_dynamixel_write(dev, DXL_ADDR_PROFILE_ACCELERATION, payload,
+					   sizeof(payload), true);
+}
+
+static int asr_dynamixel_dev_get_profile_velocity(const struct device *dev,
+						   uint32_t *velocity)
+{
+	int32_t value;
+	int ret;
+
+	if (velocity == NULL) {
+		return -EINVAL;
+	}
+
+	ret = asr_dynamixel_read_le32(dev, DXL_ADDR_PROFILE_VELOCITY, &value);
+	if (ret < 0) {
+		return ret;
+	}
+
+	*velocity = (uint32_t)value;
+	return 0;
+}
+
+static int asr_dynamixel_dev_set_profile_velocity(const struct device *dev,
+						   uint32_t velocity)
+{
+	uint8_t payload[4];
+
+	sys_put_le32(velocity, payload);
+	return asr_dynamixel_write(dev, DXL_ADDR_PROFILE_VELOCITY, payload,
+					   sizeof(payload), true);
+}
+
 static int asr_dynamixel_dev_set_goal_position(const struct device *dev,
 					       int32_t goal_position)
 {
@@ -447,6 +608,26 @@ static int asr_dynamixel_dev_set_goal_position(const struct device *dev,
 	sys_put_le32((uint32_t)goal_position, payload);
 	return asr_dynamixel_write(dev, DXL_ADDR_GOAL_POSITION, payload,
 				   sizeof(payload), true);
+}
+
+static int asr_dynamixel_dev_get_goal_position(const struct device *dev,
+					       int32_t *goal_position)
+{
+	return asr_dynamixel_read_le32(dev, DXL_ADDR_GOAL_POSITION, goal_position);
+}
+
+static int asr_dynamixel_dev_read_control_table(const struct device *dev,
+					       uint16_t address, uint8_t *payload,
+					       size_t payload_len)
+{
+	return asr_dynamixel_read_control(dev, address, payload, payload_len);
+}
+
+static int asr_dynamixel_dev_write_control_table(const struct device *dev,
+						uint16_t address, const uint8_t *payload,
+						size_t payload_len)
+{
+	return asr_dynamixel_write(dev, address, payload, payload_len, true);
 }
 
 static int asr_dynamixel_dev_get_present_position(const struct device *dev,
@@ -537,8 +718,18 @@ static const struct asr_dynamixel_driver_api asr_dynamixel_api = {
 	.ping = asr_dynamixel_dev_ping,
 	.get_operating_mode = asr_dynamixel_dev_get_operating_mode,
 	.set_operating_mode = asr_dynamixel_dev_set_operating_mode,
-	.set_goal_position = asr_dynamixel_dev_set_goal_position,
+	.get_drive_mode = asr_dynamixel_dev_get_drive_mode,
+	.set_drive_mode = asr_dynamixel_dev_set_drive_mode,
 	.set_torque = asr_dynamixel_dev_set_torque,
+	.get_torque = asr_dynamixel_dev_get_torque,
+	.get_profile_acceleration = asr_dynamixel_dev_get_profile_acceleration,
+	.set_profile_acceleration = asr_dynamixel_dev_set_profile_acceleration,
+	.get_profile_velocity = asr_dynamixel_dev_get_profile_velocity,
+	.set_profile_velocity = asr_dynamixel_dev_set_profile_velocity,
+	.set_goal_position = asr_dynamixel_dev_set_goal_position,
+	.get_goal_position = asr_dynamixel_dev_get_goal_position,
+	.read_control_table = asr_dynamixel_dev_read_control_table,
+	.write_control_table = asr_dynamixel_dev_write_control_table,
 	.get_status_return_level = asr_dynamixel_dev_get_status_return_level,
 	.set_status_return_level = asr_dynamixel_dev_set_status_return_level,
 	.get_hardware_error_status = asr_dynamixel_dev_get_hardware_error_status,
@@ -605,6 +796,30 @@ int asr_dynamixel_set_operating_mode(uint8_t mode)
 	return api->set_operating_mode(asr_dynamixel_dev, mode);
 }
 
+int asr_dynamixel_get_drive_mode(uint8_t *mode)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->get_drive_mode(asr_dynamixel_dev, mode);
+}
+
+int asr_dynamixel_set_drive_mode(uint8_t mode)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->set_drive_mode(asr_dynamixel_dev, mode);
+}
+
 int asr_dynamixel_set_torque(bool enable)
 {
 	const struct asr_dynamixel_driver_api *api = asr_dynamixel_get_api(asr_dynamixel_dev);
@@ -614,6 +829,18 @@ int asr_dynamixel_set_torque(bool enable)
 	}
 
 	return api->set_torque(asr_dynamixel_dev, enable);
+}
+
+int asr_dynamixel_get_torque(bool *enabled)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->get_torque(asr_dynamixel_dev, enabled);
 }
 
 int asr_dynamixel_get_status_return_level(uint8_t *level)
@@ -640,6 +867,54 @@ int asr_dynamixel_set_status_return_level(uint8_t level)
 	return api->set_status_return_level(asr_dynamixel_dev, level);
 }
 
+int asr_dynamixel_get_profile_acceleration(uint32_t *acceleration)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->get_profile_acceleration(asr_dynamixel_dev, acceleration);
+}
+
+int asr_dynamixel_set_profile_acceleration(uint32_t acceleration)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->set_profile_acceleration(asr_dynamixel_dev, acceleration);
+}
+
+int asr_dynamixel_get_profile_velocity(uint32_t *velocity)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->get_profile_velocity(asr_dynamixel_dev, velocity);
+}
+
+int asr_dynamixel_set_profile_velocity(uint32_t velocity)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->set_profile_velocity(asr_dynamixel_dev, velocity);
+}
+
 int asr_dynamixel_set_goal_position(int32_t goal_position)
 {
 	const struct asr_dynamixel_driver_api *api = asr_dynamixel_get_api(asr_dynamixel_dev);
@@ -649,6 +924,43 @@ int asr_dynamixel_set_goal_position(int32_t goal_position)
 	}
 
 	return api->set_goal_position(asr_dynamixel_dev, goal_position);
+}
+
+int asr_dynamixel_get_goal_position(int32_t *goal_position)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->get_goal_position(asr_dynamixel_dev, goal_position);
+}
+
+int asr_dynamixel_read_control_table(uint16_t address, uint8_t *data, size_t length)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->read_control_table(asr_dynamixel_dev, address, data, length);
+}
+
+int asr_dynamixel_write_control_table(uint16_t address, const uint8_t *data,
+				      size_t length)
+{
+	const struct asr_dynamixel_driver_api *api =
+		asr_dynamixel_get_api(asr_dynamixel_dev);
+
+	if (!device_is_ready(asr_dynamixel_dev)) {
+		return -ENODEV;
+	}
+
+	return api->write_control_table(asr_dynamixel_dev, address, data, length);
 }
 
 int asr_dynamixel_get_present_position(int32_t *position)

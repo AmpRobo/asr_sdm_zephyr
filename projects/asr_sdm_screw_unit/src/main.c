@@ -1,45 +1,30 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  *
- * The application delegates LED, IMU, Dynamixel servo, and UART communication
- * activity to the ASR helper modules. Dynamixel bring-up and command handling
- * live in the dynamixel module (see asr/dynamixel.h and
- * asr/dynamixel_thread.h); main only wires the comm callbacks used by the
- * UART0 protocol path.
+ * 应用入口负责装配模块回调并管理模块生命周期。
+ * UART0 连接 BCAN-S01 并运行 PROTOL CAN 传输；
+ * UART1 用作 Dynamixel RS-485 总线。
  */
 
-#include <asr/comm_thread.h>
+#include <asr/barometer_thread.h>
+#include <asr/can_protocol_thread.h>
 #include <asr/cpu_monitor_thread.h>
 #include <asr/dynamixel.h>
 #include <asr/dynamixel_thread.h>
 #include <asr/imu.h>
 #include <asr/imu_thread.h>
 #include <asr/led_thread.h>
+#include <asr/protocol_core.h>
 #include <asr/robot_base.h>
-
-#include <errno.h>
+#include <asr/usr_led.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(unit_system, LOG_LEVEL_INF);
 
-#define UNIT_SYSTEM_THREAD_START_DELAY_MS 10U
-
 unit_status_t unit_status;
 K_MUTEX_DEFINE(unit_status_mutex);
-
-static int handle_imu_read(uint8_t buf[ASR_COMM_MSG_SIZE])
-{
-	ARG_UNUSED(buf);
-	return -ENOTSUP;
-}
-
-static const struct asr_comm_callbacks comm_callbacks = {
-	.on_dynamixel_torque = asr_dynamixel_app_handle_torque,
-	.on_dynamixel_goal_position = asr_dynamixel_app_handle_goal_position,
-	.on_imu_read = handle_imu_read,
-};
 
 static void unit_system_log_banner(void)
 {
@@ -48,10 +33,35 @@ static void unit_system_log_banner(void)
 	LOG_INF("==========================================");
 }
 
-static bool unit_system_init_modules(void)
+/* -------------------------------------------------------------------------
+ * Protocol core callbacks
+ *
+ * These are registered with protocol_core so that CAN frames carrying
+ * ASR protocol messages dispatch to the correct hardware module.
+ * ------------------------------------------------------------------------- */
+
+static const struct asr_comm_callbacks app_callbacks = {
+	.on_led_write            = asr_usr_led_app_handle_write,
+	.on_dynamixel_torque     = asr_dynamixel_app_handle_torque,
+	.on_dynamixel_goal_position = asr_dynamixel_app_handle_goal_position,
+	.on_dynamixel_position_read = asr_dynamixel_app_handle_position_read,
+	.on_imu_read             = asr_imu_app_handle_read,
+};
+
+/* -------------------------------------------------------------------------
+ * Module lifecycle
+ * ------------------------------------------------------------------------- */
+
+struct unit_module_state {
+	bool dynamixel_ready;
+	bool can_proto_ready;
+	bool barometer_ready;
+};
+
+static struct unit_module_state unit_system_init_modules(void)
 {
+	struct unit_module_state state = {0};
 	int ret;
-	bool comm_ready = false;
 
 	ret = asr_led_thread_init();
 	if (ret < 0) {
@@ -63,17 +73,21 @@ static bool unit_system_init_modules(void)
 		LOG_WRN("CPU monitor thread init failed: %d (continuing without CPU monitor)", ret);
 	}
 
-	asr_comm_register_callbacks(&comm_callbacks);
-	ret = asr_comm_thread_init();
-	if (ret < 0) {
-		LOG_WRN("Comm thread init failed: %d (continuing without comm)", ret);
-	} else {
-		comm_ready = true;
-	}
-
 	ret = asr_dynamixel_thread_init();
 	if (ret < 0) {
 		LOG_WRN("Dynamixel thread init failed: %d (continuing without Dynamixel)", ret);
+	} else {
+		state.dynamixel_ready = true;
+	}
+
+	/* Register protocol core callbacks before starting the CAN thread. */
+	asr_protocol_core_register_callbacks(&app_callbacks);
+
+	ret = asr_can_protocol_thread_init();
+	if (ret < 0) {
+		LOG_WRN("CAN protocol thread init failed: %d (continuing without CAN)", ret);
+	} else {
+		state.can_proto_ready = true;
 	}
 
 	ret = asr_imu_thread_init();
@@ -81,32 +95,45 @@ static bool unit_system_init_modules(void)
 		LOG_WRN("IMU thread init failed: %d (continuing without IMU)", ret);
 	}
 
-	return comm_ready;
+	ret = asr_barometer_thread_init();
+	if (ret < 0) {
+		LOG_WRN("Barometer thread init failed: %d (continuing without barometer)",
+			ret);
+	} else {
+		state.barometer_ready = true;
+	}
+
+	return state;
 }
 
-static void unit_system_start_modules(bool comm_ready)
+static void unit_system_start_modules(const struct unit_module_state *state)
 {
 	asr_led_thread_start();
 	asr_cpu_monitor_thread_start();
-	if (comm_ready) {
-		asr_comm_thread_start();
+	if (state->dynamixel_ready) {
+		asr_dynamixel_thread_start();
 	}
-	asr_dynamixel_thread_start();
 	asr_imu_thread_start();
+	if (state->can_proto_ready) {
+		asr_can_protocol_thread_start();
+	}
+	if (state->barometer_ready) {
+		int ret = asr_barometer_thread_start();
+
+		if (ret < 0) {
+			LOG_WRN("Barometer thread start failed: %d", ret);
+		}
+	}
 }
 
 int main(void)
 {
-	bool comm_ready;
+	struct unit_module_state state;
 
 	unit_system_log_banner();
-	comm_ready = unit_system_init_modules();
+	state = unit_system_init_modules();
 
-	LOG_INF("all modules initialised, starting threads");
-	k_sleep(K_MSEC(UNIT_SYSTEM_THREAD_START_DELAY_MS));
-
-	unit_system_start_modules(comm_ready);
-
-	LOG_INF("all background threads started");
+	unit_system_start_modules(&state);
+	LOG_INF("all modules initialised and background threads started");
 	return 0;
 }

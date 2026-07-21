@@ -79,7 +79,7 @@ int asr_dynamixel_thread_start(void)
 	}
 
 	dxl_thread_started = true;
-	LOG_INF("Dynamixel thread started");
 	k_thread_start(&dxl_thread_data);
+	LOG_INF("Dynamixel thread started");
 	return 0;
 }
