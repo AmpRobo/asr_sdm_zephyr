@@ -105,3 +105,8 @@ int asr_usr_led_set_brightness(uint8_t brightness)
 	return -ENOTSUP;
 #endif
 }
+
+void asr_usr_led_app_handle_write(bool state)
+{
+	(void)asr_usr_led_set_brightness(state ? 100U : 0U);
+}

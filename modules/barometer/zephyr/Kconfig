@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config ASR_BAROMETER
+	bool "ASR HP206F barometer helper"
+	default n
+	depends on SENSOR && HP206C
+	help
+	  Project wrapper for the HP206F pressure and temperature channels using
+	  Zephyr's command-compatible HP206C sensor driver.
+
+config ASR_BAROMETER_THREAD
+	bool "ASR barometer background thread"
+	default n
+	depends on ASR_BAROMETER
+	help
+	  Periodically samples pressure and temperature in a dedicated low-priority
+	  thread and emits rate-limited log output.
+
+config ASR_BAROMETER_OSR
+	int "Barometer oversampling rate"
+	default 1024
+	range 128 4096
+	depends on ASR_BAROMETER
+	help
+	  Valid HP206F values are 128, 256, 512, 1024, 2048 and 4096.
+
+config ASR_BAROMETER_STARTUP_DELAY_MS
+	int "Barometer startup delay in milliseconds"
+	default 300
+	range 0 60000
+	depends on ASR_BAROMETER_THREAD
+
+config ASR_BAROMETER_PERIOD_MS
+	int "Barometer sampling period in milliseconds"
+	default 500
+	range 1 60000
+	depends on ASR_BAROMETER_THREAD
+
+config ASR_BAROMETER_LOG_INTERVAL_MS
+	int "Barometer log interval in milliseconds"
+	default 5000
+	range 1 600000
+	depends on ASR_BAROMETER_THREAD
+
+config ASR_BAROMETER_THREAD_STACK_SIZE
+	int "Barometer thread stack size"
+	default 1536
+	range 1024 8192
+	depends on ASR_BAROMETER_THREAD
+
+config ASR_BAROMETER_THREAD_PRIORITY
+	int "Barometer thread priority"
+	default 11
+	range 0 15
+	depends on ASR_BAROMETER_THREAD
+	help
+	  Preemptive Zephyr thread priority; larger values have lower priority.

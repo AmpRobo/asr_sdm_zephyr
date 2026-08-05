@@ -57,6 +57,7 @@ struct asr_comm_callbacks {
 	void (*on_motor_set)(uint8_t channel, uint8_t value);
 	void (*on_dynamixel_torque)(uint8_t id, bool enable);
 	void (*on_dynamixel_goal_position)(uint8_t id, int32_t goal_position);
+	int (*on_dynamixel_position_read)(uint8_t id, int32_t *position);
 	/**
 	 * Read IMU data into a response buffer.
 	 * @param buf  Output buffer of exactly @ref ASR_COMM_MSG_SIZE bytes.
@@ -84,6 +85,8 @@ typedef struct {
 /**
  * Register hardware-action callbacks invoked by the protocol handler.
  *
+ * Legacy wrapper; forwards to asr_protocol_core_register_callbacks().
+ *
  * @param cb  Pointer to a callback structure (may be NULL to clear).
  */
 void asr_comm_register_callbacks(const struct asr_comm_callbacks *cb);
@@ -104,7 +107,10 @@ int asr_comm_thread_init(void);
 int asr_comm_thread_start(void);
 
 /**
- * Transmit an 8-byte protocol message (blocking, poll-based).
+ * Legacy UART-AA55 send wrapper (blocking, poll-based, thread-safe).
+ *
+ * Forwards to asr_uart_aa55_send().  The protocol core MUST NOT call this
+ * function directly; it returns replies through struct asr_protocol_result.
  *
  * @param data  Pointer to exactly @ref ASR_COMM_MSG_SIZE bytes.
  * @return 0 on success, negative errno on failure.
@@ -113,6 +119,8 @@ int asr_comm_send(const uint8_t data[ASR_COMM_MSG_SIZE]);
 
 /**
  * Get a read-only snapshot of the current unit status.
+ *
+ * Legacy wrapper; forwards to asr_protocol_core_get_status().
  */
 const asr_unit_status_t *asr_comm_get_status(void);
 

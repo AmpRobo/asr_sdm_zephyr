@@ -142,42 +142,48 @@ int asr_dynamixel_app_init(void)
 	return 0;
 }
 
-void asr_dynamixel_app_handle_torque(uint8_t id, bool enable)
+int asr_dynamixel_app_request_torque(uint8_t id, bool enable)
 {
 	int ret;
 
 	if (id != ASR_DYNAMIXEL_PRIMARY_INSTANCE) {
 		LOG_DBG("忽略未映射的舵机扭矩命令: joint=%u", id + 1U);
-		return;
+		return -ENOENT;
 	}
 
 	if (!dxl_state.ready) {
 		LOG_WRN("舵机未就绪, 忽略扭矩命令");
-		return;
+		return -EAGAIN;
 	}
 
 	ret = asr_dynamixel_set_torque(enable);
 	if (ret < 0) {
 		LOG_ERR("舵机扭矩设置失败: %d", ret);
-		return;
+		return ret;
 	}
 
 	LOG_INF("舵机扭矩已%s", enable ? "使能" : "关闭");
+	return 0;
 }
 
-void asr_dynamixel_app_handle_goal_position(uint8_t id, int32_t goal_position)
+void asr_dynamixel_app_handle_torque(uint8_t id, bool enable)
+{
+	(void)asr_dynamixel_app_request_torque(id, enable);
+}
+
+int asr_dynamixel_app_request_goal_position(uint8_t id, int32_t goal_position)
 {
 	int ret;
 	int32_t present_position;
 
 	if (id != ASR_DYNAMIXEL_PRIMARY_INSTANCE) {
 		LOG_DBG("忽略未映射的舵机位置命令: joint=%u", id + 1U);
-		return;
+		return -ENOENT;
 	}
 
 	if (!dxl_state.ready) {
 		LOG_WRN("舵机未就绪, 忽略位置命令");
-		return;
+		return -EAGAIN;
 	}
 
 	if (!dxl_goal_position_valid(goal_position)) {
@@ -185,23 +191,29 @@ void asr_dynamixel_app_handle_goal_position(uint8_t id, int32_t goal_position)
 			(long)goal_position,
 			(long)dxl_state.min_position,
 			(long)dxl_state.max_position);
-		return;
+		return -ERANGE;
 	}
 
 	ret = asr_dynamixel_set_goal_position(goal_position);
 	if (ret < 0) {
 		LOG_ERR("舵机目标位置设置失败: %d", ret);
-		return;
+		return ret;
 	}
 
 	ret = asr_dynamixel_get_present_position(&present_position);
 	if (ret < 0) {
 		LOG_WRN("舵机位置回读失败: %d", ret);
-		return;
+		return ret;
 	}
 
 	LOG_INF("舵机目标位置=%ld, 当前回读位置=%ld",
 		(long)goal_position, (long)present_position);
+	return 0;
+}
+
+void asr_dynamixel_app_handle_goal_position(uint8_t id, int32_t goal_position)
+{
+	(void)asr_dynamixel_app_request_goal_position(id, goal_position);
 }
 
 int asr_dynamixel_app_handle_position_read(uint8_t id, int32_t *position)

@@ -1,10 +1,10 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * ICM-42688 sensor devicetree configuration
+ * ICM-45686 sensor devicetree configuration
  * for Seeed XIAO RP2350 development board
  *
  * Hardware wiring:
- *   ICM-42688    XIAO RP2350
+ *   ICM-45686    XIAO RP2350
  *   ---------    -----------
  *   SPC (SCK)    D8  (GP2)
  *   SDI (MOSI)   D10 (GP3)
@@ -14,7 +14,8 @@
  *   GND          GND
  */
 
-#include <zephyr/dt-bindings/sensor/icm42688.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/sensor/icm45686.h>
 
 /* USB CDC ACM device (console TX + interface module RX) */
 &zephyr_udc0 {
@@ -28,6 +29,11 @@
 / {
 	chosen {
 		zephyr,console = &cdc_acm_uart0;
+	};
+
+	aliases {
+		asr-imu = &icm45686;
+		asr-barometer = &hp206f;
 	};
 };
 
@@ -45,7 +51,8 @@
 };
 
 &uart0 {
-	current-speed = <57600>;
+	/* UART0 连接 BCAN-S01，模块默认 TTL 串口参数为 115200 8N1。 */
+	current-speed = <115200>;
 	status = "okay";
 };
 
@@ -62,23 +69,58 @@
 		turnaround-delay-us = <2000>;
 	};
 };
+&i2c0 {
+	status = "okay";
+	pinctrl-0 = <&i2c0_pullup_default>;
+	pinctrl-names = "default";
+
+	hp206f: pressure-sensor@76 {
+		/* HP206F 压力/温度命令与 Zephyr HP206C driver 兼容。 */
+		compatible = "hoperf,hp206c";
+		reg = <0x76>;
+		status = "okay";
+	};
+};
+
+/* D4/GP6 预留给漏水传感器，避免 I2C1 占用 D4/D5。 */
+&i2c1 {
+	status = "disabled";
+};
+
 &xiao_spi {
 	status = "okay";
 	cs-gpios = <&xiao_d 3 GPIO_ACTIVE_LOW>;  /* D3 = GP5 */
 
-	icm42688: icm42688@0 {
-		compatible = "invensense,icm42688", "invensense,icm4268x";
+	icm45686: icm45686@0 {
+		compatible = "invensense,icm45686";
 		reg = <0>;
 		spi-max-frequency = <24000000>;  /* 24 MHz */
 
 		/* Accelerometer configuration */
-		accel-pwr-mode = <ICM42688_DT_ACCEL_LN>;      /* Low-noise mode */
-		accel-fs = <ICM42688_DT_ACCEL_FS_16>;         /* ±16g */
-		accel-odr = <ICM42688_DT_ACCEL_ODR_1000>;     /* 1000 Hz */
+		accel-pwr-mode = <ICM45686_DT_ACCEL_LN>;      /* Low-noise mode */
+		accel-fs = <ICM45686_DT_ACCEL_FS_16>;         /* ±16g */
+		accel-odr = <ICM45686_DT_ACCEL_ODR_800>;      /* 800 Hz */
 
 		/* Gyroscope configuration */
-		gyro-pwr-mode = <ICM42688_DT_GYRO_LN>;        /* Low-noise mode */
-		gyro-fs = <ICM42688_DT_GYRO_FS_500>;          /* ±500 dps */
-		gyro-odr = <ICM42688_DT_GYRO_ODR_200>;        /* 200 Hz */
+		gyro-pwr-mode = <ICM45686_DT_GYRO_LN>;        /* Low-noise mode */
+		gyro-fs = <ICM45686_DT_GYRO_FS_500>;          /* ±500 dps */
+		gyro-odr = <ICM45686_DT_GYRO_ODR_200>;        /* 200 Hz */
+	};
+};
+
+/* 板载无 I2C 上拉，HP206F 使用 RP2350 内部上拉（~50kΩ）。 */
+&pinctrl {
+	i2c0_pullup_default: i2c0_pullup_default {
+		group1 {
+			pinmux = <I2C0_SDA_P16>;
+			input-enable;
+			bias-pull-up;
+		};
+
+		group2 {
+			pinmux = <I2C0_SCL_P17>;
+			input-enable;
+			bias-pull-up;
+		};
 	};
 };

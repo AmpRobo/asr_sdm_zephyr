@@ -1,33 +1,125 @@
 # SPDX-License-Identifier: Apache-2.0
 
+config ASR_PROTOCOL_CORE
+	bool "ASR SDM protocol core"
+	default n
+	help
+	  Transport-independent 8-byte protocol message processing core.
+	  Selected automatically by the transport module.  Can be enabled
+	  standalone for testing.
+
+# --- Transport selection (mutually exclusive: UART0 has one owner) ----------
+
+choice ASR_PROTOCOL_TRANSPORT
+	prompt "ASR protocol transport"
+	default ASR_TRANSPORT_UART_AA55
+	help
+	  Select the transport layer for the ASR SDM protocol.  Only one
+	  transport can be enabled because UART0 must have a single owner.
+
+config ASR_TRANSPORT_UART_AA55
+	bool "Legacy UART-AA55 transport"
+	select ASR_PROTOCOL_CORE
+	help
+	  Legacy UART [0xAA 0x55 LEN DATA... CHECKSUM] framing on UART0.
+	  Uses interrupt-driven RX and poll-based TX.
+
+config ASR_TRANSPORT_BCAN_PROTOL
+	bool "BCAN-S01 PROTOL CAN transport"
+	select ASR_PROTOCOL_CORE
+	help
+	  BCAN-S01 13-byte PROTOL frames on UART0.  Decodes CAN frames
+	  from the serial stream and forwards 8-byte payloads to the
+	  protocol core.  Uses poll-based UART I/O.
+
+endchoice
+
+# --- Legacy backward-compat alias ------------------------------------------
+
 config ASR_COMM
-	bool "ASR UART communication module"
+	bool "ASR UART AA55 communication module (legacy)"
 	default n
 	depends on SERIAL && UART_INTERRUPT_DRIVEN
 	help
-	  UART0-based communication module implementing the ASR SDM protocol.
-	  Receives and sends 8-byte protocol messages with frame synchronization
-	  over a simple [0xAA 0x55 LEN DATA... CHECKSUM] framing layer.
+	  Legacy name for the UART-AA55 transport.  No longer selects the
+	  transport directly; use ASR_TRANSPORT_UART_AA55 instead.
+
+if ASR_TRANSPORT_UART_AA55
 
 config ASR_COMM_THREAD_STACK_SIZE
 	int "Communication thread stack size"
 	default 1024
-	depends on ASR_COMM
+	depends on ASR_TRANSPORT_UART_AA55
 	help
 	  Stack size for the UART communication processing thread.
 
 config ASR_COMM_THREAD_PRIORITY
 	int "Communication thread priority"
 	default 5
-	depends on ASR_COMM
+	depends on ASR_TRANSPORT_UART_AA55
 	help
-	  Cooperative priority of the UART communication thread.  Lower numbers
-	  mean higher priority.
+	  Cooperative priority of the UART communication thread.  Lower
+	  numbers mean higher priority.
 
 config ASR_COMM_RX_QUEUE_DEPTH
 	int "RX message queue depth"
 	default 8
-	depends on ASR_COMM
+	depends on ASR_TRANSPORT_UART_AA55
 	help
-	  Maximum number of received frames that can be queued between the ISR
-	  and the processing thread before the oldest frame is silently dropped.
+	  Maximum number of received frames that can be queued between the
+	  ISR and the processing thread before the oldest frame is silently
+	  dropped.
+
+endif # ASR_TRANSPORT_UART_AA55 || ASR_COMM
+
+# --- BCAN / CAN transport configuration -------------------------------------
+
+if ASR_TRANSPORT_BCAN_PROTOL
+
+config ASR_CAN_PROTOCOL_REQUEST_CAN_ID
+	hex "CAN request identifier"
+	default 0x201
+	range 0x000 0x7FF
+	help
+	  Standard CAN ID that this node responds to.  Frames with a
+	  different ID are silently ignored.
+
+config ASR_CAN_PROTOCOL_RESPONSE_CAN_ID
+	hex "CAN response identifier"
+	default 0x281
+	range 0x000 0x7FF
+	help
+	  Standard CAN ID used for response frames.
+
+config ASR_BCAN_PROTOL_RX_QUEUE_DEPTH
+	int "Decoded CAN frame queue depth"
+	default 8
+	range 1 64
+	help
+	  Maximum number of decoded CAN frames that can be queued between
+	  the UART poll loop and the processing thread before the oldest
+	  frame is silently dropped.
+
+config ASR_BCAN_INTERBYTE_TIMEOUT_MS
+	int "BCAN PROTOL inter-byte timeout (ms)"
+	default 20
+	range 1 1000
+	help
+	  Maximum time to wait between bytes of a 13-byte PROTOL frame
+	  before giving up and resyncing.
+
+config ASR_CAN_PROTOCOL_THREAD_STACK_SIZE
+	int "CAN protocol thread stack size"
+	default 2048
+	range 512 8192
+	help
+	  Stack size for the background CAN protocol processing thread.
+
+config ASR_CAN_PROTOCOL_THREAD_PRIORITY
+	int "CAN protocol thread priority"
+	default 5
+	range 0 15
+	help
+	  Priority for the background CAN protocol processing thread.
+
+endif # ASR_TRANSPORT_BCAN_PROTOL

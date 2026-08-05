@@ -5,8 +5,8 @@ config ASR_IMU
 	default y
 	depends on SENSOR
 	help
-	  Driver helpers for the project's ICM-42688 sensor. Provides device
-	  readiness validation and single-sample reads.
+	  Driver helpers for the project's IMU sensor. Provides device readiness
+	  validation and single-sample reads.
 
 config ASR_AHRS
 	bool "ASR AHRS fusion"
@@ -38,3 +38,11 @@ config ASR_IMU_PERIOD_MS
 	help
 	  Delay between IMU fetch and AHRS update iterations. Logging is throttled
 	  independently.
+
+config ASR_IMU_LOG_INTERVAL_MS
+	int "IMU log interval in milliseconds"
+	default 1000
+	depends on ASR_IMU
+	help
+	  Minimum delay between IMU sample log output lines. This only affects
+	  serial logging; sampling and AHRS update timing use ASR_IMU_PERIOD_MS.

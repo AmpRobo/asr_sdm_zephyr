@@ -204,8 +204,8 @@ int asr_imu_thread_start(void)
     }
 
     imu_thread_started = true;
-    LOG_INF("IMU thread started");
     k_thread_start(&imu_thread_data);
+    LOG_INF("IMU thread started");
     return 0;
 }
 

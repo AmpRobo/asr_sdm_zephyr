@@ -8,6 +8,7 @@
 #define ASR_IMU_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <zephyr/drivers/sensor.h>
 
 #ifdef __cplusplus
@@ -45,6 +46,13 @@ int asr_imu_update(void);
  * @return 0 on success, -ENODATA if no sample has been captured yet.
  */
 int asr_imu_get_latest(struct asr_imu_sample *sample);
+
+/**
+ * 读取最新 IMU 样本并编码应用层响应数据。
+ * @param buf 固定为 8 字节的输出缓冲区。
+ * @return 成功返回 0，失败返回负 errno。
+ */
+int asr_imu_app_handle_read(uint8_t buf[8]);
 
 struct asr_ahrs_sample {
     float quaternion[4];

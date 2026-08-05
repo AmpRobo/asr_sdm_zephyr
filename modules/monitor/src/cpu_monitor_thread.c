@@ -75,7 +75,7 @@ int asr_cpu_monitor_thread_start(void)
         LOG_ERR("CPU monitor thread not initialised");
         return -EINVAL;
     }
-    LOG_INF("CPU monitor thread started");
     k_thread_start(&cpu_mon_thread_data);
+    LOG_INF("CPU monitor thread started");
     return 0;
 }
